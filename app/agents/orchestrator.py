@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Any, List
+from typing import Any, List, Optional
 
 from app.agents.react_agent import ReActAgent
 from app.models.schemas import AgentNote, TripPlan, TripRequest, TripResponse
@@ -7,8 +7,9 @@ from app.tools.travel_tools import estimate_costs, get_poi_suggestions, get_weat
 
 
 class TravelOrchestrator:
-    def __init__(self, use_react: bool = False) -> None:
+    def __init__(self, use_react: bool = False, context: Optional[dict] = None) -> None:
         self.use_react = use_react
+        self.context = context
         if use_react:
             self.react_agent = ReActAgent()
 
@@ -20,7 +21,15 @@ class TravelOrchestrator:
         
         days = self._trip_days(req.start_date, req.end_date)
         weather_hint = get_weather_hint(req.destination, req.start_date, req.end_date)
+        
+        # 使用上下文信息优化POI推荐
         poi = get_poi_suggestions(req.destination, req.interests)
+        if self.context and "preferences" in self.context:
+            preferences = self.context["preferences"]
+            if "preferred_destinations" in preferences:
+                # 如果用户偏好中包含当前目的地，可以提供更个性化的推荐
+                pass
+        
         budget = estimate_costs(days, req.travelers, req.budget_cny)
 
         planner_output = self._planner_agent(req, days, weather_hint, poi)

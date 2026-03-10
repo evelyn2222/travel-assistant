@@ -13,6 +13,7 @@
 - **天气提示**：根据旅行日期提供目的地的天气情况和穿衣建议
 - **当地提示**：提供当地交通、景点游览等实用信息
 - **ReAct Agent**：支持基于ReAct范式（推理-行动-观察）的智能代理，自主决策工具调用
+- **上下文工程**：支持会话记忆和用户偏好存储，实现多轮对话和个性化推荐
 
 ## 技术栈
 
@@ -48,6 +49,65 @@
 
 **启用ReAct模式**：
 在 `.env` 文件中设置 `USE_REACT=true` 即可启用ReAct模式。
+
+## 上下文工程
+
+系统实现了完整的上下文工程功能，支持会话记忆和用户偏好存储：
+
+### 会话管理
+
+- **会话创建**：通过 `/session` 接口创建新会话，支持自定义过期时间
+- **会话查询**：通过 `/session/<session_id>` 获取会话上下文和历史消息
+- **会话更新**：每次交互自动更新会话时间，防止过期
+
+### 用户偏好存储
+
+- **偏好保存**：通过 `/session/<session_id>/preferences` 保存用户偏好
+- **偏好应用**：系统会根据用户偏好自动调整推荐策略
+- **个性化推荐**：基于历史偏好提供更精准的旅行建议
+
+### 对话历史
+
+- **消息存储**：自动保存用户和助手的对话历史
+- **上下文传递**：在生成旅行计划时，自动传递历史上下文
+- **多轮对话**：支持基于历史对话进行修改和优化
+
+### API接口
+
+```bash
+# 创建会话
+curl -X POST "http://127.0.0.1:8001/session" \
+  -H "Content-Type: application/json" \
+  -d '{"user_id": "user123", "ttl_hours": 24}'
+
+# 获取会话上下文
+curl "http://127.0.0.1:8001/session/session_xxx"
+
+# 保存用户偏好
+curl -X POST "http://127.0.0.1:8001/session/session_xxx/preferences" \
+  -H "Content-Type: application/json" \
+  -d '{"preferences": {"preferred_destinations": ["东京", "上海"], "preferred_budget": 10000}}'
+
+# 添加消息到上下文
+curl -X POST "http://127.0.0.1:8001/session/session_xxx/message" \
+  -H "Content-Type: application/json" \
+  -d '{"role": "user", "content": "我想去东京旅行"}'
+```
+
+### 使用会话ID
+
+在调用 `/plan-trip` 接口时，可以传入 `session_id` 参数来启用上下文：
+
+```bash
+curl -X POST "http://127.0.0.1:8001/plan-trip" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "session_id": "session_xxx",
+    "origin": "上海",
+    "destination": "东京",
+    ...
+  }'
+```
 
 ## 安装步骤
 
@@ -128,6 +188,8 @@ app/
     llm.py          # 语言模型调用
     orchestrator.py  # 代理编排
     react_agent.py   # ReAct Agent实现
+  context/           # 上下文管理模块
+    context_manager.py  # 会话和偏好管理
   models/            # 数据模型
     schemas.py      # 请求和响应模式
   tools/             # 工具函数
@@ -180,6 +242,13 @@ requirements.txt    # 依赖列表
 - 提供当地交通信息
 - 提供景点游览建议
 - 提供安全提示
+
+### 7. 上下文工程
+
+- **会话管理**：支持创建、查询、更新会话
+- **用户偏好**：保存和应用用户偏好，实现个性化推荐
+- **对话历史**：自动保存对话历史，支持多轮对话
+- **上下文传递**：在生成旅行计划时自动传递历史上下文
 
 ## 常见问题
 

@@ -7,6 +7,7 @@ from dotenv import load_dotenv
 from flask import Flask, request, jsonify, render_template
 
 from app.agents.orchestrator import TravelOrchestrator
+from app.context.context_manager import ContextManager
 
 load_dotenv()
 
@@ -15,6 +16,9 @@ app = Flask(__name__, template_folder='web')
 # 初始化orchestrator，根据环境变量决定是否使用ReAct范式
 USE_REACT = os.getenv("USE_REACT", "false").lower() == "true"
 orchestrator = TravelOrchestrator(use_react=USE_REACT)
+
+# 初始化上下文管理器
+context_manager = ContextManager(db_path=os.path.join(os.path.dirname(__file__), "travel_context.db"))
 
 
 @app.route("/")
@@ -25,6 +29,72 @@ def index():
 @app.route("/health")
 def health():
     return jsonify({"status": "ok"})
+
+
+@app.route("/session", methods=["POST"])
+def create_session():
+    try:
+        req = request.json or {}
+        user_id = req.get("user_id", "default")
+        ttl_hours = req.get("ttl_hours", 24)
+        
+        session_id = context_manager.create_session(user_id, ttl_hours)
+        
+        return jsonify({
+            "session_id": session_id,
+            "message": "会话创建成功"
+        }), 200
+    except Exception as e:
+        return jsonify({"error": f"创建会话失败: {str(e)}"}), 500
+
+
+@app.route("/session/<session_id>", methods=["GET"])
+def get_session(session_id: str):
+    try:
+        context = context_manager.get_session_context(session_id)
+        if not context:
+            return jsonify({"error": "会话不存在或已过期"}), 404
+        
+        return jsonify(context), 200
+    except Exception as e:
+        return jsonify({"error": f"获取会话失败: {str(e)}"}), 500
+
+
+@app.route("/session/<session_id>/preferences", methods=["POST"])
+def save_preferences(session_id: str):
+    try:
+        req = request.json
+        preferences = req.get("preferences", {})
+        
+        session = context_manager.get_session(session_id)
+        if not session:
+            return jsonify({"error": "会话不存在或已过期"}), 404
+        
+        context_manager.save_user_preferences(session["user_id"], preferences)
+        context_manager.update_session(session_id)
+        
+        return jsonify({"message": "偏好保存成功"}), 200
+    except Exception as e:
+        return jsonify({"error": f"保存偏好失败: {str(e)}"}), 500
+
+
+@app.route("/session/<session_id>/message", methods=["POST"])
+def add_message(session_id: str):
+    try:
+        req = request.json
+        role = req.get("role", "user")
+        content = req.get("content", "")
+        
+        session = context_manager.get_session(session_id)
+        if not session:
+            return jsonify({"error": "会话不存在或已过期"}), 404
+        
+        context_manager.add_message(session_id, role, content)
+        context_manager.update_session(session_id)
+        
+        return jsonify({"message": "消息添加成功"}), 200
+    except Exception as e:
+        return jsonify({"error": f"添加消息失败: {str(e)}"}), 500
 
 
 def call_minimax_api(prompt):
@@ -571,11 +641,40 @@ def plan_trip():
         req.setdefault("travelers", 1)
         req.setdefault("interests", [])
         req.setdefault("pace", "balanced")
+        
+        # 获取会话上下文
+        session_id = req.get("session_id")
+        context = {}
+        if session_id:
+            context = context_manager.get_session_context(session_id)
+            if not context:
+                return jsonify({"error": "会话不存在或已过期"}), 404
+            
+            # 将用户偏好合并到请求中
+            preferences = context.get("preferences", {})
+            if "preferred_destinations" in preferences:
+                if not req.get("interests"):
+                    req["interests"] = preferences.get("preferred_interests", [])
+            if "preferred_budget" in preferences:
+                if not req.get("budget_cny"):
+                    req["budget_cny"] = preferences["preferred_budget"]
+            
+            # 添加用户消息到上下文
+            context_manager.add_message(session_id, "user", str(req))
 
         # 使用orchestrator生成旅行计划
         from app.models.schemas import TripRequest
         trip_request = TripRequest(**req)
-        response = orchestrator.build_trip_plan(trip_request)
+        
+        # 传递上下文给orchestrator
+        orchestrator_instance = TravelOrchestrator(use_react=USE_REACT, context=context if session_id else None)
+        response = orchestrator_instance.build_trip_plan(trip_request)
+
+        # 如果有会话ID，保存助手回复
+        if session_id:
+            assistant_message = response.plan.caveats[0] if response.plan.caveats else str(response.plan)
+            context_manager.add_message(session_id, "assistant", assistant_message)
+            context_manager.update_session(session_id)
 
         # 如果使用ReAct范式，返回自然语言格式的计划
         if USE_REACT:
