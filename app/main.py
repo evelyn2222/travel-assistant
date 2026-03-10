@@ -134,7 +134,7 @@ def call_minimax_api(prompt):
         print(f"调用MINIMAX Coding Plan API，提示词: {prompt[:50]}...")
         print(f"API端点: {url}")
         print(f"API密钥: {headers['Authorization'][:20]}...")
-        response = requests.post(url, headers=headers, json=data, timeout=60, verify=False)
+        response = requests.post(url, headers=headers, json=data, timeout=10, verify=False)
         print(f"API响应状态码: {response.status_code}")
         print(f"API响应内容: {response.text[:200]}...")
         response.raise_for_status()
@@ -146,7 +146,7 @@ def call_minimax_api(prompt):
         elif 'choices' in result and result['choices']:
             content = result['choices'][0]['message']['content'].strip()
             # 去除思考过程
-            if '<think>' in content:
+            if '</think>' in content:
                 content = content.split('</think>')[-1].strip()
             print(f"API返回结果: {content[:100]}...")
             return content
@@ -155,66 +155,12 @@ def call_minimax_api(prompt):
             return ""
     except requests.exceptions.Timeout:
         print("MINIMAX API调用超时")
-        # 尝试使用备用端点
-        return call_minimax_api_backup(prompt)
+        return ""
     except requests.exceptions.RequestException as e:
         print(f"MINIMAX API调用失败: {e}")
-        # 尝试使用备用端点
-        return call_minimax_api_backup(prompt)
+        return ""
     except Exception as e:
         print(f"其他错误: {e}")
-        # 尝试使用备用端点
-        return call_minimax_api_backup(prompt)
-
-def call_minimax_api_backup(prompt):
-    """使用备用端点调用MINIMAX API"""
-    # 从环境变量中读取API密钥
-    minimax_api_key = os.getenv('MINIMAX_API_KEY', '')
-    if not minimax_api_key:
-        print("未设置MINIMAX_API_KEY环境变量")
-        return ""
-    
-    url = "https://api.minimaxi.com/v1/chat/completions"
-    headers = {
-        "Content-Type": "application/json",
-        "Authorization": f"Bearer {minimax_api_key}"
-    }
-    data = {
-        "model": "MiniMax-M2.5",
-        "messages": [
-            {
-                "role": "user",
-                "content": prompt
-            }
-        ],
-        "temperature": 0.2,
-        "max_tokens": 2000
-    }
-    try:
-        print(f"调用MINIMAX备用API，提示词: {prompt[:50]}...")
-        print(f"API端点: {url}")
-        print(f"API密钥: {headers['Authorization'][:20]}...")
-        response = requests.post(url, headers=headers, json=data, timeout=60, verify=False)
-        print(f"API响应状态码: {response.status_code}")
-        print(f"API响应内容: {response.text[:200]}...")
-        response.raise_for_status()
-        result = response.json()
-        # 检查响应结构
-        if 'reply' in result:
-            print(f"API返回结果: {result.get('reply', '')[:100]}...")
-            return result.get("reply", "").strip()
-        elif 'choices' in result and result['choices']:
-            content = result['choices'][0]['message']['content'].strip()
-            # 去除思考过程
-            if '<think>' in content:
-                content = content.split('</think>')[-1].strip()
-            print(f"API返回结果: {content[:100]}...")
-            return content
-        else:
-            print("API响应格式不正确")
-            return ""
-    except Exception as e:
-        print(f"备用API调用失败: {e}")
         return ""
 
 
