@@ -1,0 +1,158 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>智能旅行助手</title>
+    <style>
+      :root {
+        --bg: #f3efe6;
+        --paper: #fffcf7;
+        --ink: #1f2a37;
+        --accent: #0e7490;
+        --accent-2: #f97316;
+      }
+      body {
+        margin: 0;
+        font-family: "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
+        color: var(--ink);
+        background: radial-gradient(circle at top left, #fff7ed 0%, var(--bg) 45%, #dbeafe 100%);
+        min-height: 100vh;
+        display: grid;
+        place-items: center;
+        padding: 24px;
+      }
+      .card {
+        width: min(980px, 100%);
+        background: var(--paper);
+        border: 2px solid #e5e7eb;
+        border-radius: 20px;
+        box-shadow: 0 20px 55px rgba(15, 23, 42, 0.12);
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        overflow: hidden;
+      }
+      .left {
+        padding: 28px;
+        border-right: 1px solid #e5e7eb;
+      }
+      .right {
+        padding: 28px;
+        background: linear-gradient(180deg, #f8fafc 0%, #fff7ed 100%);
+      }
+      h1 {
+        margin-top: 0;
+        font-size: 30px;
+        margin-bottom: 8px;
+      }
+      p {
+        margin-top: 0;
+        color: #4b5563;
+      }
+      label {
+        display: block;
+        margin-top: 10px;
+        margin-bottom: 4px;
+        font-size: 13px;
+      }
+      input {
+        width: 100%;
+        padding: 10px;
+        border-radius: 10px;
+        border: 1px solid #d1d5db;
+      }
+      button {
+        margin-top: 16px;
+        width: 100%;
+        padding: 12px;
+        border: 0;
+        border-radius: 12px;
+        background: linear-gradient(90deg, var(--accent), var(--accent-2));
+        color: white;
+        font-weight: 700;
+        cursor: pointer;
+      }
+      pre {
+        white-space: pre-wrap;
+        background: #0f172a;
+        color: #e5e7eb;
+        border-radius: 12px;
+        padding: 14px;
+        min-height: 420px;
+        max-height: 560px;
+        overflow: auto;
+        font-size: 12px;
+      }
+      @media (max-width: 900px) {
+        .card {
+          grid-template-columns: 1fr;
+        }
+        .left {
+          border-right: 0;
+          border-bottom: 1px solid #e5e7eb;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="card">
+      <div class="left">
+        <h1>智能旅行助手</h1>
+        <p>输入基础信息，生成结构化行程、预算与本地建议。</p>
+        <label>出发地</label>
+        <input id="origin" value="上海" />
+        <label>目的地</label>
+        <input id="destination" value="东京" />
+        <label>开始日期</label>
+        <input id="start_date" type="date" value="2026-05-01" />
+        <label>结束日期</label>
+        <input id="end_date" type="date" value="2026-05-05" />
+        <label>人数</label>
+        <input id="travelers" type="number" value="2" min="1" />
+        <label>预算（CNY）</label>
+        <input id="budget_cny" type="number" value="12000" min="100" />
+        <label>兴趣（逗号分隔）</label>
+        <input id="interests" value="美食,城市漫步,艺术馆" />
+        <button onclick="submitPlan()">生成旅行计划</button>
+      </div>
+      <div class="right">
+        <pre id="result">等待生成...</pre>
+      </div>
+    </div>
+    <script>
+      async function submitPlan() {
+        const body = {
+          origin: document.getElementById('origin').value,
+          destination: document.getElementById('destination').value,
+          start_date: document.getElementById('start_date').value,
+          end_date: document.getElementById('end_date').value,
+          travelers: Number(document.getElementById('travelers').value),
+          budget_cny: Number(document.getElementById('budget_cny').value),
+          interests: document
+            .getElementById('interests')
+            .value.split(',')
+            .map((x) => x.trim())
+            .filter(Boolean),
+          pace: 'balanced',
+        };
+        const result = document.getElementById('result');
+        result.textContent = '生成中...';
+        try {
+          const resp = await fetch('/plan-trip', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body),
+          });
+          if (!resp.ok) {
+            const errorData = await resp.json();
+            throw new Error(errorData.error || '生成失败，请重试');
+          }
+          const data = await resp.text();
+          result.textContent = data;
+        } catch (error) {
+          result.textContent = `错误：${error.message}`;
+        }
+      }
+    </script>
+  </body>
+</html>
