@@ -6,9 +6,15 @@ import requests
 from dotenv import load_dotenv
 from flask import Flask, request, jsonify, render_template
 
+from app.agents.orchestrator import TravelOrchestrator
+
 load_dotenv()
 
 app = Flask(__name__, template_folder='web')
+
+# 初始化orchestrator，根据环境变量决定是否使用ReAct范式
+USE_REACT = os.getenv("USE_REACT", "false").lower() == "true"
+orchestrator = TravelOrchestrator(use_react=USE_REACT)
 
 
 @app.route("/")
@@ -566,8 +572,18 @@ def plan_trip():
         req.setdefault("interests", [])
         req.setdefault("pace", "balanced")
 
-        result = build_trip_plan(req)
-        return result, 200, {"Content-Type": "text/plain; charset=utf-8"}
+        # 使用orchestrator生成旅行计划
+        from app.models.schemas import TripRequest
+        trip_request = TripRequest(**req)
+        response = orchestrator.build_trip_plan(trip_request)
+
+        # 如果使用ReAct范式，返回自然语言格式的计划
+        if USE_REACT:
+            return response.plan.caveats[0], 200, {"Content-Type": "text/plain; charset=utf-8"}
+        else:
+            # 使用原有的简化版旅行计划生成器
+            result = build_trip_plan(req)
+            return result, 200, {"Content-Type": "text/plain; charset=utf-8"}
     except ValueError as e:
         return jsonify({"error": str(e)}), 400
     except Exception as e:

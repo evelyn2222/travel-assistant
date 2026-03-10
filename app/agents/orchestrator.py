@@ -1,18 +1,23 @@
 from datetime import datetime
 from typing import Any, List
 
-from app.agents.llm import LLMClient
+from app.agents.react_agent import ReActAgent
 from app.models.schemas import AgentNote, TripPlan, TripRequest, TripResponse
 from app.tools.travel_tools import estimate_costs, get_poi_suggestions, get_weather_hint
 
 
 class TravelOrchestrator:
-    def __init__(self) -> None:
-        self.llm = LLMClient()
+    def __init__(self, use_react: bool = False) -> None:
+        self.use_react = use_react
+        if use_react:
+            self.react_agent = ReActAgent()
 
     def build_trip_plan(self, req: TripRequest) -> TripResponse:
         notes: List[AgentNote] = []
 
+        if self.use_react:
+            return self._build_trip_plan_react(req, notes)
+        
         days = self._trip_days(req.start_date, req.end_date)
         weather_hint = get_weather_hint(req.destination, req.start_date, req.end_date)
         poi = get_poi_suggestions(req.destination, req.interests)
@@ -33,6 +38,41 @@ class TravelOrchestrator:
             budget_breakdown=budget_output,
             local_tips=guide_output.get("local_tips", []),
             caveats=guide_output.get("caveats", [weather_hint]),
+        )
+
+        return TripResponse(request=req, plan=plan, notes=notes)
+
+    def _build_trip_plan_react(self, req: TripRequest, notes: List[AgentNote]) -> TripResponse:
+        query = f"""请帮我规划一次旅行：
+出发地: {req.origin}
+目的地: {req.destination}
+出发日期: {req.start_date}
+返回日期: {req.end_date}
+人数: {req.travelers}
+预算: {req.budget_cny}元
+兴趣: {', '.join(req.interests)}
+节奏: {req.pace}
+
+请生成详细的旅行计划，包括：
+1. 行程概览
+2. 每日行程安排（上午、中午、下午、晚上）
+3. 预算明细
+4. 本地建议和注意事项
+
+请用自然语言回答，格式清晰易读。"""
+
+        react_result = self.react_agent.run_with_fallback(query)
+        notes.append(AgentNote(agent="react", summary="已使用ReAct范式生成完整旅行计划。"))
+
+        days = self._trip_days(req.start_date, req.end_date)
+        budget = estimate_costs(days, req.travelers, req.budget_cny)
+
+        plan = TripPlan(
+            overview=f"{req.destination} {days} 日旅行计划",
+            itinerary=[],
+            budget_breakdown=budget,
+            local_tips=[],
+            caveats=[react_result],
         )
 
         return TripResponse(request=req, plan=plan, notes=notes)

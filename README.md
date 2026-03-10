@@ -12,6 +12,7 @@
 - **预算估算**：根据旅行天数和人数，估算旅行预算并提供优化建议
 - **天气提示**：根据旅行日期提供目的地的天气情况和穿衣建议
 - **当地提示**：提供当地交通、景点游览等实用信息
+- **ReAct Agent**：支持基于ReAct范式（推理-行动-观察）的智能代理，自主决策工具调用
 
 ## 技术栈
 
@@ -19,6 +20,34 @@
 - **API集成**：MINIMAX API
 - **前端**：HTML, CSS, JavaScript
 - **依赖管理**：pip
+- **Agent架构**：支持多Agent协作范式和ReAct范式
+
+## Agent架构
+
+### 多Agent协作范式（默认）
+
+系统采用多Agent协作架构，通过Orchestrator协调多个专业Agent：
+
+- **Planner Agent**：负责行程规划和每日安排
+- **Budget Agent**：负责预算优化和成本分配
+- **Local Guide Agent**：负责本地建议和实用提示
+
+### ReAct范式（可选）
+
+系统支持基于ReAct范式的智能代理，通过推理-行动-观察循环自主决策：
+
+- **推理**：分析用户需求，决定下一步行动
+- **行动**：调用相应的工具获取信息
+- **观察**：根据工具返回结果继续推理
+- **循环**：直到收集足够信息，给出最终答案
+
+**ReAct Agent优势**：
+- 自主决策：LLM自主决定何时调用工具、调用哪个工具
+- 灵活性：根据实际情况动态调整策略
+- 可扩展性：易于添加新的工具和能力
+
+**启用ReAct模式**：
+在 `.env` 文件中设置 `USE_REACT=true` 即可启用ReAct模式。
 
 ## 安装步骤
 
@@ -87,6 +116,7 @@ curl -X POST "http://127.0.0.1:8001/plan-trip" \
 | `MINIMAX_API_KEY` | 无 | MINIMAX API 密钥 |
 | `OPENAI_API_KEY` | 无 | OpenAI API 密钥（可选） |
 | `OPENAI_MODEL` | `gpt-4.1-mini` | OpenAI 模型（可选） |
+| `USE_REACT` | `false` | 是否启用ReAct模式（true/false） |
 | `APP_HOST` | `127.0.0.1` | 应用主机地址 |
 | `APP_PORT` | `8001` | 应用端口 |
 
@@ -97,6 +127,7 @@ app/
   agents/            # 代理相关代码
     llm.py          # 语言模型调用
     orchestrator.py  # 代理编排
+    react_agent.py   # ReAct Agent实现
   models/            # 数据模型
     schemas.py      # 请求和响应模式
   tools/             # 工具函数
